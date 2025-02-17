@@ -33,16 +33,50 @@ list-containers:
 	@docker container ls
 
 
-ACCESS_CONTAINER=6379
-INTERNAL_EXPOSED_PORT=6379
-IMAGE_NAME="redis:7.4.2-alpine3.21"
-CONTAINER_NAME="redis-cache"
+REDIS_ACCESS=6379
+REDIS_INTERNAL=6379
+REDIS_IMAGE="redis:7.4.2-alpine3.21"
+REDIS_CONTAINER_NAME="redis-cache"
 
-.PHONY: run-redis
+.PHONY: run-redis stop-redis
 run-redis:
-	@echo "Running container, access by using port $(ACCESS_CONTAINER)"
-	@docker run -d --rm --name $(CONTAINER_NAME) -p $(ACCESS_CONTAINER):$(INTERNAL_EXPOSED_PORT) $(IMAGE_NAME)
-
+	@echo "Running Redis container, access by using port $(REDIS_ACCESS)"
+	@docker run -d --rm --name $(REDIS_CONTAINER_NAME) -p $(REDIS_ACCESS):$(REDIS_INTERNAL) $(REDIS_IMAGE)
 
 stop-redis:
-	@docker container stop $(CONTAINER_NAME)
+	@docker container stop $(REDIS_CONTAINER_NAME)
+
+PG_ACCESS=5432
+PG_INTERNAL=5432
+PG_CONTAINER_NAME="gredis-pg-db"
+
+.PHONY: run-pg stop-pg
+run-pg:
+	@echo "Running Postgres container, access by using port $(PG_ACCESS)"
+	@docker run -d --rm \
+	--name gredis-pg-db \
+	-v gredis-db:/var/lib/postgresql/data \
+	-e POSTGRES_DB=gredis \
+	-e POSTGRES_PASSWORD=adminpass \
+	-e POSTGRES_USER=admin \
+	-p $(PG_ACCESS):$(PG_INTERNAL) \
+	postgres:16.3-alpine
+
+stop-pg:
+	@docker container stop $(PG_CONTAINER_NAME)
+
+
+# goose migrations commands
+DB_ADDR="postgres://admin:adminpass@localhost/gredis?sslmode=disable"
+MIGRATIONS_DIR =./sql/migrations
+
+.PHONY: goose-up goose-down goose-status
+
+goose-up:
+	@goose -dir $(MIGRATIONS_DIR) postgres "$(DB_ADDR)" up
+
+goose-down:
+	@goose -dir $(MIGRATIONS_DIR) postgres "$(DB_ADDR)" down
+
+goose-status:
+	goose -dir $(MIGRATIONS_DIR) postgres "$(DB_ADDR)" status

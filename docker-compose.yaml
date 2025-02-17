@@ -1,0 +1,8 @@
+services:
+  redis:
+    image: redis:7.4.2-alpine3.21
+    restart: unless-stopped
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --loglevel warning

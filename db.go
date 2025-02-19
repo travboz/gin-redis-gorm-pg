@@ -57,12 +57,3 @@ func initDB() *gorm.DB {
 
 	return db
 }
-
-func initRedisClient() *redis.Client {
-	client := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
-
-	return client
-
-}

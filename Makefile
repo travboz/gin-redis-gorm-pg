@@ -26,7 +26,7 @@ up:
 .PHONY: down
 down:
 	@echo "Stopping containers..."
-	@docker compose down
+	@docker compose down -v
 
 list-containers:
 	@echo "Listing containers..."

@@ -3,7 +3,19 @@ package main
 import (
 	"context"
 	"database/sql"
+	"log"
 	"time"
+
+	"github.com/redis/go-redis/v9"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+)
+
+var (
+	ctx    = context.Background()
+	client = redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
 )
 
 func NewDB(addr string, maxOpenConns, maxIdleConns int, maxIdleTime string) (*sql.DB, error) {
@@ -32,4 +44,27 @@ func NewDB(addr string, maxOpenConns, maxIdleConns int, maxIdleTime string) (*sq
 	}
 
 	return db, nil
+}
+
+func initDB() *gorm.DB {
+	// dsn := "host=localhost user=admin password=adminpass dbname=gredis port=5432 sslmode=disable TimeZone=Australia/Sydney"
+	dsn := "postgres://admin:adminpass@localhost/gredis?sslmode=disable"
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	db.AutoMigrate(&Product{})
+	db.Create(&Product{Name: "Product1", Price: 100})
+
+	return db
+}
+
+func initRedisClient() *redis.Client {
+	client := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+
+	return client
+
 }

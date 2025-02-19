@@ -67,8 +67,14 @@ func (app *application) updateProductByIdHandler(c *gin.Context) {
 		return
 	}
 	if err := app.cache.updateProductWithTransaction(uint(id), req.Name, req.Price); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
+		switch err {
+		case ErrProductNotFound:
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		default:
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
 	}
 	c.JSON(200, gin.H{"status": "updated"})
 }

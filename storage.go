@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+
 	"gorm.io/gorm"
 )
 
@@ -10,6 +12,10 @@ type Storage interface {
 	deleteProduct(id uint) error
 	updateProduct(id uint, name string, price int) error
 }
+
+var (
+	ErrProductNotFound = errors.New("product not found")
+)
 
 type PGStorage struct {
 	db *gorm.DB
@@ -58,10 +64,17 @@ func (pg *PGStorage) updateProduct(id uint, name string, price int) error {
 		return tx.Error
 	}
 
-	// Update the database first
-	if err := tx.Model(&Product{}).Where("id = ?", id).Updates(Product{Name: name, Price: price}).Error; err != nil {
+	// Perform the update
+	result := tx.Model(&Product{}).Where("id = ?", id).Updates(Product{Name: name, Price: price})
+	if result.Error != nil {
 		tx.Rollback() // Rollback if DB update fails
-		return err
+		return result.Error
+	}
+
+	// Check if the product existed
+	if result.RowsAffected == 0 {
+		tx.Rollback()
+		return ErrProductNotFound
 	}
 
 	// Commit the DB transaction before updating Redis

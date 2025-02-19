@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
-	"time"
 
 	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/postgres"
@@ -18,33 +16,33 @@ var (
 	})
 )
 
-func NewDB(addr string, maxOpenConns, maxIdleConns int, maxIdleTime string) (*sql.DB, error) {
-	db, err := sql.Open("postgres", addr)
+// func NewDB(addr string, maxOpenConns, maxIdleConns int, maxIdleTime string) (*sql.DB, error) {
+// 	db, err := sql.Open("postgres", addr)
 
-	if err != nil {
-		return nil, err
-	}
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	db.SetMaxOpenConns(maxOpenConns)
+// 	db.SetMaxOpenConns(maxOpenConns)
 
-	duration, err := time.ParseDuration(maxIdleTime)
-	if err != nil {
-		return nil, err
-	}
+// 	duration, err := time.ParseDuration(maxIdleTime)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	db.SetConnMaxIdleTime(duration)
-	db.SetMaxIdleConns(maxIdleConns)
+// 	db.SetConnMaxIdleTime(duration)
+// 	db.SetMaxIdleConns(maxIdleConns)
 
-	// if it takes more than 5 seconds to connect to the db, we timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+// 	// if it takes more than 5 seconds to connect to the db, we timeout
+// 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+// 	defer cancel()
 
-	if err = db.PingContext(ctx); err != nil {
-		return nil, err
-	}
+// 	if err = db.PingContext(ctx); err != nil {
+// 		return nil, err
+// 	}
 
-	return db, nil
-}
+// 	return db, nil
+// }
 
 func initDB() *gorm.DB {
 	// dsn := "host=localhost user=admin password=adminpass dbname=gredis port=5432 sslmode=disable TimeZone=Australia/Sydney"

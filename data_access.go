@@ -156,3 +156,60 @@ func updateProductWithTransaction(db *gorm.DB, id uint, name string, price int) 
 
 	return err // Return Redis error if any
 }
+
+// START write-behind caching
+// Write-behind caching strategy
+// In a Write-behind caching strategy, updates are written to the cache first and asynchronously to the database later.
+// func createOrUpdateProductWriteBehind(id uint, name string, price int) error {
+// 	// Write data to Redis cache
+// 	cacheKey := fmt.Sprintf("product:%d", id)
+// 	client.HMSet(ctx, cacheKey, map[string]any{
+// 		"name":  name,
+// 		"price": price,
+// 	})
+
+// 	client.Expire(ctx, cacheKey, time.Minute) // set TTL
+
+// 	// Track this operation in a queue for background processing
+// 	// .RPush pushes to the tail of the list stored at the key
+// 	client.RPush(ctx, "write-behind-queue", cacheKey)
+// 	return nil
+// }
+
+// // Background Worker for Database Synchronization
+// // A background worker will listen for cache entries in write-behind-queue and write them to the database.
+// func writeBehindWorker(db *gorm.DB) {
+// 	for {
+// 		// pop from the queue
+// 		cacheKey, err := client.LPop(ctx, "write-behind-queue").Result()
+// 		if err == redis.Nil {
+// 			time.Sleep(time.Second) // Sleep if queue is empty
+// 			continue
+// 		} else if err != nil {
+// 			log.Println("Error fetching from queue:", err)
+// 			continue
+// 		}
+
+// 		// there is something on the queue to process
+// 		values, err := client.HGetAll(ctx, cacheKey).Result()
+// 		if err != nil || len(values) == 0 {
+// 			continue
+// 		}
+
+// 		// Write to the database
+// 		idStr := strings.TrimPrefix(cacheKey, "product:")
+// 		id, _ := strconv.Atoi(idStr)
+// 		price, _ := strconv.Atoi(values["price"])
+
+// 		product := Product{ID: uint(id), Name: values["name"], Price: price}
+// 		if err := db.Save(&product).Error; err != nil {
+// 			log.Println("Error saving to DB:", err)
+// 			continue
+// 		}
+
+// 		// Optionally, delete the cache entry if the cache is temporary
+// 		// client.Del(ctx, cacheKey)
+// 	}
+// }
+
+// END write-behind caching

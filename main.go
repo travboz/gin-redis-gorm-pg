@@ -43,7 +43,7 @@ func main() {
 	db := initDB()
 
 	app := application{
-		store: NewGormPgStorage(db),
+		store: NewPGStorage(db),
 	}
 
 	// used for write-behind caching - not the most consistent method

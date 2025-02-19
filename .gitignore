@@ -1,3 +1,5 @@
 bin/
 .env
 sql/
+extra.go
+internal/

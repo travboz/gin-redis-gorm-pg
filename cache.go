@@ -23,15 +23,6 @@ type RedisCache struct {
 	client  *redis.Client
 }
 
-func initRedisClient() *redis.Client {
-	client := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
-
-	return client
-
-}
-
 func NewRedisCache(db Storage, addr string) *RedisCache {
 	client := redis.NewClient(&redis.Options{
 		Addr: addr,

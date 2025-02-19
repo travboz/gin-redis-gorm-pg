@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
@@ -36,12 +37,14 @@ func NewRedisCache(db Storage, addr string) *RedisCache {
 
 // A Redis hash can store field-value pairs associated with a product, making it easy to cache product details.
 func (r *RedisCache) getProductByIDHash(id uint) (Product, error) {
+	ctx := context.Background()
+
 	cacheKey := fmt.Sprintf("product:%d", id)
 
 	var product Product
 
 	// check if the product is in the Redis hash
-	result, err := client.HGetAll(ctx, cacheKey).Result()
+	result, err := r.client.HGetAll(ctx, cacheKey).Result()
 	if err == nil && len(result) > 0 {
 		product.ID = id
 		product.Name = result["name"]
@@ -59,29 +62,33 @@ func (r *RedisCache) getProductByIDHash(id uint) (Product, error) {
 
 	// we've now grabbed the product from the db
 	// so insert it into the hash
-	client.HMSet(ctx, cacheKey, map[string]any{
+	r.client.HMSet(ctx, cacheKey, map[string]any{
 		"name":  exists_prod.Name,
 		"price": exists_prod.Price,
 	})
 
 	// using TimeToLive invalidation we set an expiry
-	client.Expire(ctx, cacheKey, 5*time.Minute)
+	r.client.Expire(ctx, cacheKey, 5*time.Minute)
 
 	return exists_prod, nil
 }
 
 // Store recently access product IDs in a Redis list
 func (r *RedisCache) addToRecentProductsList(id uint) {
+	ctx := context.Background()
+
 	// Insert all the specified values at the head of the list stored at key.
-	client.LPush(ctx, "recent_products", id)
+	r.client.LPush(ctx, "recent_products", id)
 
 	// Trim an existing list so that it will contain only the specified range of elements specified.
-	client.LTrim(ctx, "recent_products", 0, 9) // keep the 10 most recent products
+	r.client.LTrim(ctx, "recent_products", 0, 9) // keep the 10 most recent products
 }
 
 // Write-through caching
 // Write-through caching writes updates simultaneously to the cache and database, ensuring both stay in sync.
 func (r *RedisCache) createOrUpdateProductWriteThrough(id uint, name string, price int) error {
+	ctx := context.Background()
+
 	// update db:
 	product := Product{ID: id, Name: name, Price: price}
 
@@ -91,13 +98,13 @@ func (r *RedisCache) createOrUpdateProductWriteThrough(id uint, name string, pri
 
 	// update in the cache too - with the most recent data
 	cacheKey := fmt.Sprintf("product:%d", id)
-	client.HMSet(ctx, cacheKey, map[string]any{
+	r.client.HMSet(ctx, cacheKey, map[string]any{
 		"name":  name,
 		"price": price,
 	})
 
 	// set TLL expiry
-	client.Expire(ctx, cacheKey, 5*time.Minute)
+	r.client.Expire(ctx, cacheKey, 5*time.Minute)
 
 	return nil
 }
@@ -105,8 +112,10 @@ func (r *RedisCache) createOrUpdateProductWriteThrough(id uint, name string, pri
 // Manual invalidation
 // Manual invalidation removes outdated entries from the cache explicitly, such as when data changes.
 func (r *RedisCache) invalidateProductCache(id uint) error {
+	ctx := context.Background()
+
 	cacheKey := fmt.Sprintf("product:%d", id)
-	_, err := client.Del(ctx, cacheKey).Result() // remove the cache entry
+	_, err := r.client.Del(ctx, cacheKey).Result() // remove the cache entry
 	return err
 }
 
@@ -130,7 +139,9 @@ func (r *RedisCache) deleteProductEventBased(id uint) error {
 3. If the data isn’t available (a cache miss), the database is queried for the data. The cache is then populated with the data that is retrieved from the database, and the data is returned to the caller.
 */
 func (r *RedisCache) getRecentProducts() ([]Product, error) {
-	productIDs, err := client.LRange(ctx, "recent_products", 0, -1).Result()
+	ctx := context.Background()
+
+	productIDs, err := r.client.LRange(ctx, "recent_products", 0, -1).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -150,6 +161,8 @@ func (r *RedisCache) getRecentProducts() ([]Product, error) {
 
 // Redis transaction for atomic updates - all or nothing
 func (r *RedisCache) updateProductWithTransaction(id uint, name string, price int) error {
+	ctx := context.Background()
+
 	cacheKey := fmt.Sprintf("product:%d", id)
 
 	// perform transaction on db
@@ -158,7 +171,7 @@ func (r *RedisCache) updateProductWithTransaction(id uint, name string, price in
 	}
 
 	// Update Redis cache after DB commit
-	_, err := client.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+	_, err := r.client.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		pipe.HMSet(ctx, cacheKey, map[string]any{
 			"name":  name,
 			"price": price,

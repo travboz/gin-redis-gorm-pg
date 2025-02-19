@@ -1,19 +1,10 @@
 package main
 
 import (
-	"context"
 	"log"
 
-	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-)
-
-var (
-	ctx    = context.Background()
-	client = redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
 )
 
 // func NewDB(addr string, maxOpenConns, maxIdleConns int, maxIdleTime string) (*sql.DB, error) {

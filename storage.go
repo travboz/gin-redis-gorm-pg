@@ -10,8 +10,28 @@ import (
 	"gorm.io/gorm"
 )
 
+type Storage interface {
+	getProductByIDHash(id uint) (Product, error)
+	addToRecentProductsList(id uint)
+	createOrUpdateProductWriteThrough(id uint, name string, price int) error
+	invalidateProductCache(id uint) error
+	deleteProductEventBased(id uint) error
+	getRecentProducts() ([]Product, error)
+	updateProductWithTransaction(id uint, name string, price int) error
+}
+
+type GormPgStorage struct {
+	db *gorm.DB
+}
+
+func NewGormPgStorage(db *gorm.DB) *GormPgStorage {
+	return &GormPgStorage{
+		db: db,
+	}
+}
+
 // A Redis hash can store field-value pairs associated with a product, making it easy to cache product details.
-func getProductByIDHash(db *gorm.DB, id uint) (Product, error) {
+func (gp *GormPgStorage) getProductByIDHash(id uint) (Product, error) {
 	cacheKey := fmt.Sprintf("product:%d", id)
 
 	var product Product
@@ -27,7 +47,7 @@ func getProductByIDHash(db *gorm.DB, id uint) (Product, error) {
 	}
 
 	// if it doesn't exist in the has, then check db
-	if err := db.First(&product, id).Error; err != nil {
+	if err := gp.db.First(&product, id).Error; err != nil {
 		// return an empty product
 		return product, err
 	}
@@ -46,7 +66,7 @@ func getProductByIDHash(db *gorm.DB, id uint) (Product, error) {
 }
 
 // Store recently access product IDs in a Redis list
-func addToRecentProductsList(id uint) {
+func (gp *GormPgStorage) addToRecentProductsList(id uint) {
 	// Insert all the specified values at the head of the list stored at key.
 	client.LPush(ctx, "recent_products", id)
 
@@ -56,10 +76,10 @@ func addToRecentProductsList(id uint) {
 
 // Write-through caching
 // Write-through caching writes updates simultaneously to the cache and database, ensuring both stay in sync.
-func createOrUpdateProductWriteThrough(db *gorm.DB, id uint, name string, price int) error {
+func (gp *GormPgStorage) createOrUpdateProductWriteThrough(id uint, name string, price int) error {
 	// update db:
 	product := Product{ID: id, Name: name, Price: price}
-	if err := db.Save(&product).Error; err != nil {
+	if err := gp.db.Save(&product).Error; err != nil {
 		return err
 	}
 
@@ -78,7 +98,7 @@ func createOrUpdateProductWriteThrough(db *gorm.DB, id uint, name string, price 
 
 // Manual invalidation
 // Manual invalidation removes outdated entries from the cache explicitly, such as when data changes.
-func invalidateProductCache(id uint) error {
+func (gp *GormPgStorage) invalidateProductCache(id uint) error {
 	cacheKey := fmt.Sprintf("product:%d", id)
 	_, err := client.Del(ctx, cacheKey).Result() // remove the cache entry
 	return err
@@ -86,14 +106,14 @@ func invalidateProductCache(id uint) error {
 
 // Event-based
 // Event-based invalidation can be used to clear cache entries in response to specific application events, such as a significant data update or a deletion.
-func deleteProductEventBased(db *gorm.DB, id uint) error {
+func (gp *GormPgStorage) deleteProductEventBased(id uint) error {
 	// delete product from db
-	if err := db.Delete(&Product{}, id).Error; err != nil {
+	if err := gp.db.Delete(&Product{}, id).Error; err != nil {
 		return err
 	}
 
 	// emit an event to clear the cache
-	return invalidateProductCache(id)
+	return gp.invalidateProductCache(id)
 }
 
 // Cache-Aside (Lazy Loading):
@@ -104,7 +124,7 @@ func deleteProductEventBased(db *gorm.DB, id uint) error {
 
 3. If the data isn’t available (a cache miss), the database is queried for the data. The cache is then populated with the data that is retrieved from the database, and the data is returned to the caller.
 */
-func getRecentProducts(db *gorm.DB) ([]Product, error) {
+func (gp *GormPgStorage) getRecentProducts() ([]Product, error) {
 	productIDs, err := client.LRange(ctx, "recent_products", 0, -1).Result()
 	if err != nil {
 		return nil, err
@@ -113,7 +133,7 @@ func getRecentProducts(db *gorm.DB) ([]Product, error) {
 	var products []Product
 	for _, idStr := range productIDs {
 		id, _ := strconv.Atoi(idStr)
-		product, err := getProductByIDHash(db, uint(id))
+		product, err := gp.getProductByIDHash(uint(id))
 
 		if err == nil {
 			products = append(products, product)
@@ -124,11 +144,11 @@ func getRecentProducts(db *gorm.DB) ([]Product, error) {
 }
 
 // Redis transaction for atomic updates - all or nothing
-func updateProductWithTransaction(db *gorm.DB, id uint, name string, price int) error {
+func (gp *GormPgStorage) updateProductWithTransaction(id uint, name string, price int) error {
 	cacheKey := fmt.Sprintf("product:%d", id)
 
 	// Start a database transaction
-	tx := db.Begin()
+	tx := gp.db.Begin()
 	if tx.Error != nil {
 		return tx.Error
 	}

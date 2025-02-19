@@ -17,7 +17,7 @@ func (app *application) createProductHandler(c *gin.Context) {
 		return
 	}
 
-	err := createOrUpdateProductWriteThrough(app.db, req.ID, req.Name, req.Price)
+	err := app.store.createOrUpdateProductWriteThrough(req.ID, req.Name, req.Price)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -27,7 +27,7 @@ func (app *application) createProductHandler(c *gin.Context) {
 
 func (app *application) deleteProductByIdHandler(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	err := deleteProductEventBased(app.db, uint(id))
+	err := app.store.deleteProductEventBased(uint(id))
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -37,7 +37,7 @@ func (app *application) deleteProductByIdHandler(c *gin.Context) {
 
 func (app *application) invalidateProductInCacheHandler(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	err := invalidateProductCache(uint(id))
+	err := app.store.invalidateProductCache(uint(id))
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -47,12 +47,12 @@ func (app *application) invalidateProductInCacheHandler(c *gin.Context) {
 
 func (app *application) getProductByIdHandler(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	product, err := getProductByIDHash(app.db, uint(id))
+	product, err := app.store.getProductByIDHash(uint(id))
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	addToRecentProductsList(uint(id))
+	app.store.addToRecentProductsList(uint(id))
 	c.JSON(200, product)
 }
 
@@ -66,7 +66,7 @@ func (app *application) updateProductByIdHandler(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "Invalid request"})
 		return
 	}
-	if err := updateProductWithTransaction(app.db, uint(id), req.Name, req.Price); err != nil {
+	if err := app.store.updateProductWithTransaction(uint(id), req.Name, req.Price); err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
@@ -74,7 +74,7 @@ func (app *application) updateProductByIdHandler(c *gin.Context) {
 }
 
 func (app *application) getRecentProductsHandler(c *gin.Context) {
-	products, err := getRecentProducts(app.db)
+	products, err := app.store.getRecentProducts()
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
